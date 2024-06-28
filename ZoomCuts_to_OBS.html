@@ -1,0 +1,140 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+
+    <title>ZoomCuts shortcut</title>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+
+    <body>
+<h1 id = "testScript">Run ZoomCuts</h1>
+
+<table>
+  <thead>
+    <tr>
+      <th>Shortcut</th>
+    </tr>
+  </thead>
+  <tbody></tbody>
+</table>
+
+<p id="result"></p>
+
+    <script src="lib/websocketDetails.js"></script>
+    <script src="lib/obs-ws.js" ></script>
+    <script src="lib/obsConnect.js" ></script>
+    <script>    
+      const obs = new OBSWebSocket();
+      var elem = document.getElementById('testScript');
+      const tbodyEl = document.querySelector("tbody");
+      const tableEl = document.querySelector("table");
+      
+      wsConnect();
+      
+      async function wsConnect() 
+      {  
+        await connectOBS(obs);
+        load();
+      }
+
+      elem.addEventListener('click', function (e){
+        setCommandText('shortcuts run "Find Displays" | cat')
+        console.log("clicked")
+        //let Hks = await obs.call("GetHotkeyList")
+        //console.log(Hks)
+      })
+      
+      function load(){
+        setCommandText('shortcuts list -f ZoomCuts | cat')
+      }
+      
+      async function setCommandText(txt) {
+        await obs.call("SetInputSettings", {
+          inputName: 'ZoomCut_Command',
+          inputSettings: {
+            text: txt,
+          }
+        });
+        await obs.call("TriggerHotkeyByName",{hotkeyName:"RUN_ZoomCuts",})
+      }
+  
+      //listen for text source updates with ZoomCuts results
+      obs.on("InputSettingsChanged", async function (event) {
+        const transcription = event
+        console.log("text changed", event)
+        if (transcription.inputName === "ZoomCuts_Results") {
+          document.getElementById("result").innerText = "Results recieved"
+          
+          //Get the latest results
+          let ZoomCutResult = await obs.call("GetInputSettings", {
+							inputName: 'ZoomCuts_Results',
+						});  
+          let textIsJSON =  isJson(ZoomCutResult.inputSettings.text)
+          console.log("Zoom Results ", ZoomCutResult.inputSettings.text)
+          console.log("Zoom Results is JSON", textIsJSON)
+          
+          //check if result is a newline delimited string
+          console.log("Zoom Results contains newline", ZoomCutResult.inputSettings.text.includes('\n'))
+          if(!textIsJSON && ZoomCutResult.inputSettings.text.includes('\n')){
+            ZoomCutResult = ZoomCutResult.inputSettings.text.split('\n')
+            console.log(ZoomCutResult)
+            console.log(ZoomCutResult.length)
+          }
+          
+          //check if the result is an object
+          if(textIsJSON){
+            ZoomCutResult = JSON.parse(ZoomCutResult.inputSettings.text);
+            console.log(ZoomCutResult)
+          }
+
+          for (let index = 0; index < ZoomCutResult.length; index++) {
+            console.log(ZoomCutResult[index]); 
+            if(textIsJSON){
+              addRow(ZoomCutResult[index].name);
+            }else{
+              addRow(ZoomCutResult[index]);
+            }
+          }
+        }
+      })
+
+      //check if a string is JSON
+        function isJson(str) {
+          try {
+            JSON.parse(str);
+          } catch (e) {
+            return false;
+          }
+          return true;
+        }
+
+      function addRow(e) {
+        tbodyEl.innerHTML += `
+            <tr>
+                <td><data class='shortcut'>${e}</data></td>
+                </tr>
+                `;
+        //<td>no Class<td>
+        //<td><button class="deleteBtn">Delete</button></td>
+      }
+
+      function onRowClick(e) {
+        console.log('event', e)
+        if (e.target.classList.contains("shortcut")) {
+          console.log(e.srcElement.innerText)
+          setCommandText(`shortcuts run "${e.srcElement.innerText}" | cat`)
+        }
+        
+        if (e.target.classList.contains("deleteBtn")) {
+          console.log(btn.closest("td"))
+          const btn = e.target;
+          btn.closest("tr").remove();
+        }
+
+      }
+      tableEl.addEventListener("click", onRowClick);
+      </script>
+	
+  </body>
+</html>
